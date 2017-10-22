@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Query Serial</title>
+  <link rel="shortcut icon" href="./ico/midi.ico">
+  <script type="text/javascript" src="./js/webmidi.min.js"></script>
+
+  <style>
+  .block {
+    display: block;
+    text-align: center;
+    font-size: 28px;
+    font-weight: bold;
+  }
+  span {
+    display: inline-block;
+    width: 150px;
+    height: 30px;
+    text-align: right;
+    line-height: 30px;
+  }
+  #show_sn, #show_ver {
+    width: 200px;
+    margin-top: 5px;
+    text-align: center;
+    border: solid 2px #999;
+    padding: 3px;
+  }
+  .show {
+    margin-left: -50px;
+  }
+
+</style>
+</head>
+<body>
+  <button type="button" name="button" id="close" style="display:none">Close Device</button>
+  <div class="block">
+    <h2 id="badtime" style="color: red">No MIDI Devices !</h2>
+    <div class="show">
+      <span>序列号：</span> 
+      <span id="show_sn"> </span><br/>
+      <span>软件版本：</span>
+      <span id="show_ver"> </span>
+    </div>
+  </div>
+
+
+  <script>
+
+    var close = document.getElementById("close");
+    var show_sn = document.getElementById("show_sn");
+    var show_ver = document.getElementById("show_ver");
+
+
+    if (navigator.requestMIDIAccess) {
+      navigator.requestMIDIAccess().then(onMIDIInit, onMIDIReject);
+    } else {
+      alert("No MIDI support present in your browser.  You're gonna have a bad time.");
+    }
+
+    function hookUpMIDIInput() {
+      var haveAtLeastOneDevice = false;
+      var inputs = midiAccess.inputs.values();
+      for (var input = inputs.next(); input && !input.done; input = inputs.next()) {
+        haveAtLeastOneDevice = true;
+      }
+      var badtime = document.getElementById("badtime");
+
+      if (badtime) {
+        badtime.innerText = haveAtLeastOneDevice ? "Connecting..." : "No MIDI Devices!";
+        badtime.style.color = "black";
+
+        if (badtime.innerText == "Connecting...") {
+
+          WebMidi.enable(function(err) {
+            if (err) {
+              console.log("WebMidi could not be enabled.", err);
+            }
+            console.log(WebMidi.sysexEnabled);
+
+            var output1 = WebMidi.outputs[0];
+            var input1 = WebMidi.inputs[0];
+            badtime.innerText = output1.name;
+            badtime.style.color = "green";
+
+        // output1.sendSysex([], [0x00,0x20,0x2b,0x69,0x01,0x02]);    // MEDELI Devices Query
+        output1.sendSysex([], [0x7E, 0x00, 0x06, 0x01]);     // LQVL Query
+
+        close.addEventListener('click', Refresh, false);
+
+        input1.addListener('sysex', "all", function(e) {
+
+          var returnaDataArray = Array.from(e.data); // Array
+          for (var k = 0; k < returnaDataArray.length; k++) {
+            returnaDataArray[k] = returnaDataArray[k].toString(16).toUpperCase();
+          };
+
+          var snTemp = returnaDataArray.slice(16,20);
+          var verTemp = returnaDataArray.slice(11,15);
+          var sn = [];
+          var ver = [];
+          for (var l=0; l<4; l++) {
+            sn.push(String.fromCharCode("0x" + snTemp[l]));
+            ver.push(String.fromCharCode("0x" + verTemp[l]));
+          }
+          show_sn.innerText = "*" + sn[0] + sn[1] + sn[2] + sn[3];
+          show_ver.innerText = "V" + ver.splice(1,4).join(". ");
+        });
+      }, true);
+        } else {
+          close.click();
+        }
+      }
+    }
+
+    function onMIDIInit(midi) {
+      midiAccess = midi;
+      hookUpMIDIInput();
+      midiAccess.onstatechange = hookUpMIDIInput;
+    }
+
+    function onMIDIReject(err) {
+      alert("The MIDI system failed to start.  You're gonna have a bad time.");
+    }
+
+    function Refresh() {
+      window.location.reload();
+    }
+
+  </script>
+</body>
+</html>
